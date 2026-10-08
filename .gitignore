@@ -156,3 +156,5 @@ configs/local/default.yaml
 
 src/data/__pycache__/*
 *.pyc
+
+/fonts/
