@@ -4,7 +4,7 @@ import torch
 from torch import nn as nn
 
     
-class PatchMLP(nn.Module):
+class PatchMLP(nn.Module): #1枚の画像（aerial、spot、naip など）を、Transformer が読めるトークンに変換する入口（projector）
     def __init__(
             self,
             in_chans: int = 3,
