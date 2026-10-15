@@ -4,31 +4,33 @@ from pathlib import Path
 from PIL import Image
 import numpy as np
 
-def edge_mode_color(strip, q=16): # strip: (N, 3) uint8。量子化して最頻ビンを選び、そのビン内の元色の平均を返す
+def edge_mode_color(strip, q=16):
     bins = (strip // q).astype(np.int32)
-    keys = bins[:, 0] * 10000 + bins[:, 1] * 100 + bins[:, 2]
-    vals, counts = np.unique(keys, return_counts=True)
-    top = vals[counts.argmax()]
-    return strip[keys == top].mean(axis=0).round().astype(np.uint8)
+    vals, inv, counts = np.unique(bins, axis=0, return_inverse=True, return_counts=True)
+    return strip[inv.ravel() == counts.argmax()].mean(axis=0).round().astype(np.uint8)
 
-def pad_to_square(img, band=2, q=16):
-    h, w, _ = img.shape
-    if h == w:
+def pad_axis(img, d, axis, band=2, q=16):
+    if d == 0:
         return img
-    d = abs(h - w)
     a, b = d // 2, d - (d // 2)
-    if h > w:
-        ca = edge_mode_color(img[:, :band].reshape(-1, 3), q)
-        cb = edge_mode_color(img[:, -band:].reshape(-1, 3), q)
-        left = np.broadcast_to(ca, (h, a, 3))
-        right = np.broadcast_to(cb, (h, b, 3))
-        return np.concatenate([left, img, right], axis=1)
-    else:
-        ca = edge_mode_color(img[:band].reshape(-1, 3), q)
-        cb = edge_mode_color(img[-band:].reshape(-1, 3), q)
-        top = np.broadcast_to(ca, (a, w, 3))
-        bottom = np.broadcast_to(cb, (b, w, 3))
-        return np.concatenate([top, img, bottom], axis=0)
+    c = img.shape[2]
+    head = np.take(img, range(band), axis=axis).reshape(-1, c)
+    tail = np.take(img, range(img.shape[axis] - band, img.shape[axis]), axis=axis).reshape(-1, c)
+    shape_a, shape_b = list(img.shape), list(img.shape)
+    shape_a[axis], shape_b[axis] = a, b
+    pad_a = np.broadcast_to(edge_mode_color(head, q), shape_a)
+    pad_b = np.broadcast_to(edge_mode_color(tail, q), shape_b)
+    return np.concatenate([pad_a, img, pad_b], axis=axis)
+
+def pad_to_multiple(img, multiple=10, band=2, q=16):
+    gray = img.ndim == 2
+    if gray:
+        img = img[:, :, None]
+    h, w, _ = img.shape
+    side = -(-max(h, w) // multiple) * multiple
+    img = pad_axis(img, side - w, axis=1, band=band, q=q)
+    img = pad_axis(img, side - h, axis=0, band=band, q=q)
+    return img[:, :, 0] if gray else img
 
 def main():
     ap = argparse.ArgumentParser()
@@ -36,6 +38,7 @@ def main():
     ap.add_argument("--out_dir", default="data/chars74k_sq")
     ap.add_argument("--band", type=int, default=2, help="width of the edge strip used for the padding color")
     ap.add_argument("--q", type=int, default=16, help="quantization step per channel")
+    ap.add_argument("--multiple", type=int, default=10, help="pad to a multiple of this number")
     args = ap.parse_args()
 
     out = Path(args.out_dir)
@@ -45,7 +48,7 @@ def main():
         (out / str(digit)).mkdir(parents=True, exist_ok=True)
         for fp in sorted(src.glob("*.png")):
             img = np.asarray(Image.open(fp).convert("RGB"))
-            sq = pad_to_square(img, args.band, args.q)
+            sq = pad_to_multiple(img, args.multiple, args.band, args.q)
             Image.fromarray(np.ascontiguousarray(sq)).save(out / str(digit) / fp.name)
             n += 1
     print(f"images: {n}")

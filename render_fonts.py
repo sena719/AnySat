@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFont
 
 DIGITS = "0123456789"
 RENDER = 160
@@ -16,9 +16,10 @@ def has_all_digits(font_path): # Path -> bool
 
 
 def render_digit(font, digit, size, fill): #(font: ImageFont.FreeTypeFont, digit: str, size: int, fill: float) -> Image.Image | None:
-    big = Image.new("L", (RENDER * 2, RENDER *2), 255) #白い大きめの下書きキャンバス
-    ImageDraw.Draw(big).text((RENDER // 2, RENDER // 2), digit, font=font, fill=0)
-    bbox = ImageOps.invert(big).getbbox()
+    big = Image.new("L", (RENDER * 2, RENDER *2), 0) #黒い大きめの下書きキャンバス
+    ImageDraw.Draw(big).text((RENDER // 2, RENDER // 2), digit, font=font, fill=255)
+    # 画像の境界を取得
+    bbox = big.getbbox()
     if bbox is None:
         return None
     glyph = big.crop(bbox)
@@ -28,7 +29,7 @@ def render_digit(font, digit, size, fill): #(font: ImageFont.FreeTypeFont, digit
     w, h = max(1, round(glyph.width * scale)), max(1, round(glyph.height * scale))
     glyph = glyph.resize((w, h), Image.LANCZOS)
 
-    canvas = Image.new("L", (size, size), 255)
+    canvas = Image.new("L", (size, size), 0)
     canvas.paste(glyph, ((size - w) // 2, (size - h) // 2))
     return canvas
 
